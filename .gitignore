@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.so
+.coverage
+
 
 # Virtual environments
 .venv/
@@ -22,3 +24,5 @@ venv/
 # Logs and data
 logs/
 data/
+faiss_index/
+
