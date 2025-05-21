@@ -14,7 +14,7 @@ class SecurityValidationError(Exception):
 
 def sanitize_filepath(filepath: Union[str, Path]) -> Path:
     """
-    Sanitize and validate file path to prevent path traversal attacks.
+    Sanitize and validate file path.
     
     Args:
         filepath: The file path to sanitize
@@ -29,13 +29,6 @@ def sanitize_filepath(filepath: Union[str, Path]) -> Path:
         # Convert to Path object and resolve to absolute path
         path = Path(filepath).resolve()
         
-        # Get the workspace root (assuming this is running in the workspace)
-        workspace_root = Path.cwd().resolve()
-        
-        # Check if path is within workspace
-        if not str(path).startswith(str(workspace_root)):
-            raise SecurityValidationError("File path must be within workspace directory")
-            
         # Check if path exists
         if not path.exists():
             raise SecurityValidationError(f"File does not exist: {path}")
