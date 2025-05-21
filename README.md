@@ -11,12 +11,15 @@ root/
 │   ├── document_loaders.py   # Document loading utilities
 │   ├── rag_pipeline.py       # Main RAG pipeline implementation
 │   └── vector_store.py       # Vector store management
-├── notebooks/                    # Jupyter notebooks for demos and experiments
-├── tests/                       # Test files and configurations
-├── data/                        # Data storage (vector store, etc.)
+├── notebooks/                   # Jupyter notebooks for demos and experiments
+│   └── rag_demo.ipynb           # Main notebook.  Start here
+├── tests/                       # Test files and optional configurations (for test discovery etc.)
+│   └── test_document_loaders.py # Test file for document_loaders.py
+├── data/                        # Data storage (vector store, etc.) - ignored in .gitignore
 ├── docs/                        # Documentation
 ├── logs/                        # Log files
 ├── configs/                     # Configuration files
+├── README.md                    # This README document
 └── requirements.txt             # Project dependencies
 ```
 
