@@ -5,13 +5,12 @@ A Retrieval-Augmented Generation (RAG) system built with LangChain and OpenAI, s
 ## Project Structure
 
 ```
-rag/
+root/
 ├── src/
-│   └── rag/
-│       ├── __init__.py
-│       ├── document_loaders.py   # Document loading utilities
-│       ├── rag_pipeline.py       # Main RAG pipeline implementation
-│       └── vector_store.py       # Vector store management
+│   ├── __init__.py
+│   ├── document_loaders.py   # Document loading utilities
+│   ├── rag_pipeline.py       # Main RAG pipeline implementation
+│   └── vector_store.py       # Vector store management
 ├── notebooks/                    # Jupyter notebooks for demos and experiments
 ├── tests/                       # Test files and configurations
 ├── data/                        # Data storage (vector store, etc.)
