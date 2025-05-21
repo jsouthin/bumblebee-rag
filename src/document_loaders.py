@@ -26,6 +26,14 @@ from langchain_community.document_loaders import (
     SeleniumURLLoader,
 )
 
+from .security_utils import (
+    sanitize_filepath,
+    validate_file_type,
+    validate_url,
+    create_secure_session,
+    SecurityValidationError
+)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -93,20 +101,30 @@ class WebDocumentLoader(BaseDocumentLoader):
         urls = self._ensure_list(source)
         all_docs = []
         
+        session = create_secure_session()
+        
         for url in urls:
             try:
+                # Validate URL
+                validated_url = validate_url(url)
+                
                 loader = WebBaseLoader(
-                    web_paths=(url,),
+                    web_paths=(validated_url,),
                     bs_kwargs=dict(
                         parse_only=bs4.SoupStrainer(
                             class_=("post-content", "post-title", "post-header")
                         )
                     ),
+                    requests_kwargs={"verify": True, "timeout": 10},
+                    requests_session=session
                 )
                 docs = loader.load()
-                source_id = Path(urlparse(url).path).stem
+                source_id = Path(urlparse(validated_url).path).stem
                 all_docs.extend(self._add_metadata(docs, source_id))
-                logger.info(f"Successfully loaded document from {url}")
+                logger.info(f"Successfully loaded document from {validated_url}")
+            except SecurityValidationError as e:
+                logger.error(f"Security validation failed for URL {url}: {str(e)}")
+                raise DocumentLoadError(f"Security validation failed: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to load document from {url}: {str(e)}")
                 raise DocumentLoadError(f"Failed to load web document: {str(e)}")
@@ -123,11 +141,20 @@ class PDFDocumentLoader(BaseDocumentLoader):
         
         for path in file_paths:
             try:
-                loader = PyPDFLoader(path)
+                # Sanitize and validate file path
+                safe_path = sanitize_filepath(path)
+                
+                # Validate file type
+                validate_file_type(safe_path, ['application/pdf'])
+                
+                loader = PyPDFLoader(str(safe_path))
                 docs = loader.load()
-                source_id = Path(path).stem
+                source_id = safe_path.stem
                 all_docs.extend(self._add_metadata(docs, source_id))
-                logger.info(f"Successfully loaded PDF from {path}")
+                logger.info(f"Successfully loaded PDF from {safe_path}")
+            except SecurityValidationError as e:
+                logger.error(f"Security validation failed for file {path}: {str(e)}")
+                raise DocumentLoadError(f"Security validation failed: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to load PDF from {path}: {str(e)}")
                 raise DocumentLoadError(f"Failed to load PDF document: {str(e)}")
@@ -167,11 +194,20 @@ class CSVDocumentLoader(BaseDocumentLoader):
         
         for path in file_paths:
             try:
-                loader = CSVLoader(path)
+                # Sanitize and validate file path
+                safe_path = sanitize_filepath(path)
+                
+                # Validate file type
+                validate_file_type(safe_path, ['text/csv'])
+                
+                loader = CSVLoader(str(safe_path))
                 docs = loader.load()
-                source_id = Path(path).stem
+                source_id = safe_path.stem
                 all_docs.extend(self._add_metadata(docs, source_id))
-                logger.info(f"Successfully loaded CSV from {path}")
+                logger.info(f"Successfully loaded CSV from {safe_path}")
+            except SecurityValidationError as e:
+                logger.error(f"Security validation failed for file {path}: {str(e)}")
+                raise DocumentLoadError(f"Security validation failed: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to load CSV from {path}: {str(e)}")
                 raise DocumentLoadError(f"Failed to load CSV document: {str(e)}")
@@ -268,22 +304,18 @@ class CarbonIntensityLoader(BaseDocumentLoader):
     """Loader for UK Carbon Intensity API data."""
     
     def load(self, source: Union[str, List[str]], **kwargs) -> List[Document]:
-        """Load data from the Carbon Intensity API.
-        
-        Args:
-            source: API URL(s) to load data from. Defaults to main endpoint if not provided.
-            **kwargs: Additional arguments (unused)
-            
-        Returns:
-            List of documents containing carbon intensity data
-        """
         urls = self._ensure_list(source) if source else ["https://api.carbonintensity.org.uk/intensity"]
         all_docs = []
         
+        session = create_secure_session()
+        
         for url in urls:
             try:
+                # Validate URL
+                validated_url = validate_url(url)
+                
                 headers = {"Accept": "application/json"}
-                response = requests.get(url, headers=headers)
+                response = session.get(validated_url, headers=headers)
                 response.raise_for_status()
                 
                 data = response.json()
@@ -298,11 +330,14 @@ class CarbonIntensityLoader(BaseDocumentLoader):
                         f"Actual: {item['intensity']['actual']}\n"
                         f"Index: {item['intensity']['index']}"
                     )
-                    docs.append(Document(page_content=content, metadata={"source": url}))
+                    docs.append(Document(page_content=content, metadata={"source": validated_url}))
                 
                 source_id = "carbon_intensity"
                 all_docs.extend(self._add_metadata(docs, source_id))
-                logger.info(f"Successfully loaded carbon intensity data from {url}")
+                logger.info(f"Successfully loaded carbon intensity data from {validated_url}")
+            except SecurityValidationError as e:
+                logger.error(f"Security validation failed for URL {url}: {str(e)}")
+                raise DocumentLoadError(f"Security validation failed: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to load carbon intensity data from {url}: {str(e)}")
                 raise DocumentLoadError(f"Failed to load carbon intensity data: {str(e)}")

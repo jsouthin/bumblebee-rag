@@ -1,7 +1,14 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
-from document_loaders import (
+import sys
+
+# Add the project root to the Python path
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from src.document_loaders import (
     WebDocumentLoader,
     PDFDocumentLoader,
     GoogleDriveDocumentLoader,
@@ -59,7 +66,7 @@ class TestWebDocumentLoader:
         return WebDocumentLoader(project_id)
 
     def test_successful_load(self, web_loader, sample_document, mock_time):
-        with patch('document_loaders.WebBaseLoader') as mock_web_loader:
+        with patch('src.document_loaders.WebBaseLoader') as mock_web_loader:
             # Setup mock
             mock_instance = Mock()
             mock_instance.load.return_value = [sample_document]
@@ -76,7 +83,7 @@ class TestWebDocumentLoader:
             assert docs[0].metadata["timestamp_added"] == 1234567890
 
     def test_load_multiple_urls(self, web_loader, sample_document):
-        with patch('document_loaders.WebBaseLoader') as mock_web_loader:
+        with patch('src.document_loaders.WebBaseLoader') as mock_web_loader:
             # Setup mock
             mock_instance = Mock()
             mock_instance.load.return_value = [sample_document]
@@ -91,7 +98,7 @@ class TestWebDocumentLoader:
             assert mock_web_loader.call_count == 2
 
     def test_load_failure(self, web_loader):
-        with patch('document_loaders.WebBaseLoader') as mock_web_loader:
+        with patch('src.document_loaders.WebBaseLoader') as mock_web_loader:
             # Setup mock to raise exception
             mock_instance = Mock()
             mock_instance.load.side_effect = Exception("Failed to load")
@@ -109,11 +116,15 @@ class TestPDFDocumentLoader:
         return PDFDocumentLoader(project_id)
 
     def test_successful_load(self, pdf_loader, sample_document, mock_time):
-        with patch('document_loaders.PyPDFLoader') as mock_pdf_loader:
-            # Setup mock
+        with patch('src.document_loaders.PyPDFLoader') as mock_pdf_loader, \
+             patch('src.document_loaders.sanitize_filepath') as mock_sanitize, \
+             patch('src.document_loaders.validate_file_type') as mock_validate_type:
+            # Setup mocks
             mock_instance = Mock()
             mock_instance.load.return_value = [sample_document]
             mock_pdf_loader.return_value = mock_instance
+            mock_sanitize.return_value = Path("test.pdf")
+            mock_validate_type.return_value = True
 
             # Test
             docs = pdf_loader.load("test.pdf")
@@ -125,11 +136,15 @@ class TestPDFDocumentLoader:
             assert docs[0].metadata["timestamp_added"] == 1234567890
 
     def test_load_failure(self, pdf_loader):
-        with patch('document_loaders.PyPDFLoader') as mock_pdf_loader:
+        with patch('src.document_loaders.PyPDFLoader') as mock_pdf_loader, \
+             patch('src.document_loaders.sanitize_filepath') as mock_sanitize, \
+             patch('src.document_loaders.validate_file_type') as mock_validate_type:
             # Setup mock to raise exception
             mock_instance = Mock()
             mock_instance.load.side_effect = Exception("Failed to load PDF")
             mock_pdf_loader.return_value = mock_instance
+            mock_sanitize.return_value = Path("test.pdf")
+            mock_validate_type.return_value = True
 
             # Test
             with pytest.raises(DocumentLoadError) as exc_info:
@@ -143,7 +158,7 @@ class TestGoogleDriveDocumentLoader:
         return GoogleDriveDocumentLoader(project_id)
 
     def test_successful_load(self, gdrive_loader, sample_document, mock_time):
-        with patch('document_loaders.GoogleDriveLoader') as mock_gdrive_loader:
+        with patch('src.document_loaders.GoogleDriveLoader') as mock_gdrive_loader:
             # Setup mock
             mock_instance = Mock()
             mock_instance.load.return_value = [sample_document]
@@ -178,8 +193,10 @@ def test_metadata_consistency(mock_time):
     pdf_loader = PDFDocumentLoader("test_project")
     
     # Mock document loading
-    with patch('document_loaders.WebBaseLoader') as mock_web_loader, \
-         patch('document_loaders.PyPDFLoader') as mock_pdf_loader:
+    with patch('src.document_loaders.WebBaseLoader') as mock_web_loader, \
+         patch('src.document_loaders.PyPDFLoader') as mock_pdf_loader, \
+         patch('src.document_loaders.sanitize_filepath') as mock_sanitize, \
+         patch('src.document_loaders.validate_file_type') as mock_validate_type:
         
         # Setup mocks
         doc = Document(page_content="Test", metadata={})
@@ -189,6 +206,8 @@ def test_metadata_consistency(mock_time):
         mock_pdf_instance.load.return_value = [doc]
         mock_web_loader.return_value = mock_web_instance
         mock_pdf_loader.return_value = mock_pdf_instance
+        mock_sanitize.return_value = Path("test.pdf")
+        mock_validate_type.return_value = True
         
         # Load documents
         web_doc = web_loader.load("https://example.com")[0]
