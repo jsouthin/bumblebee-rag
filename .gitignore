@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *.so
 .coverage
-
+.ipynb_checkpoints/
 
 # Virtual environments
 .venv/
