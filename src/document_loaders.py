@@ -14,6 +14,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
+import requests
 
 from langchain.schema import Document
 from langchain_community.document_loaders import (
@@ -263,12 +264,58 @@ class DynamicWebDocumentLoader(BaseDocumentLoader):
         return all_docs
 
 
+class CarbonIntensityLoader(BaseDocumentLoader):
+    """Loader for UK Carbon Intensity API data."""
+    
+    def load(self, source: Union[str, List[str]], **kwargs) -> List[Document]:
+        """Load data from the Carbon Intensity API.
+        
+        Args:
+            source: API URL(s) to load data from. Defaults to main endpoint if not provided.
+            **kwargs: Additional arguments (unused)
+            
+        Returns:
+            List of documents containing carbon intensity data
+        """
+        urls = self._ensure_list(source) if source else ["https://api.carbonintensity.org.uk/intensity"]
+        all_docs = []
+        
+        for url in urls:
+            try:
+                headers = {"Accept": "application/json"}
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                
+                data = response.json()
+                docs = []
+                
+                for item in data.get("data", []):
+                    content = (
+                        f"Current Carbon Intensity for current half hour\n"
+                        f"From: {item['from']}\n"
+                        f"To: {item['to']}\n"
+                        f"Forecast: {item['intensity']['forecast']}\n"
+                        f"Actual: {item['intensity']['actual']}\n"
+                        f"Index: {item['intensity']['index']}"
+                    )
+                    docs.append(Document(page_content=content, metadata={"source": url}))
+                
+                source_id = "carbon_intensity"
+                all_docs.extend(self._add_metadata(docs, source_id))
+                logger.info(f"Successfully loaded carbon intensity data from {url}")
+            except Exception as e:
+                logger.error(f"Failed to load carbon intensity data from {url}: {str(e)}")
+                raise DocumentLoadError(f"Failed to load carbon intensity data: {str(e)}")
+        
+        return all_docs
+
+
 # Factory function to create the appropriate loader
 def create_document_loader(loader_type: str, project_id: str) -> BaseDocumentLoader:
     """Create a document loader instance based on the type.
     
     Args:
-        loader_type: Type of loader to create ('web', 'pdf', 'gdrive', 'csv', 'notion', 'dynamic_web')
+        loader_type: Type of loader to create ('web', 'pdf', 'gdrive', 'csv', 'notion', 'dynamic_web', 'carbon_intensity')
         project_id: Project identifier
         
     Returns:
@@ -283,7 +330,8 @@ def create_document_loader(loader_type: str, project_id: str) -> BaseDocumentLoa
         'gdrive': GoogleDriveDocumentLoader,
         'csv': CSVDocumentLoader,
         'notion': NotionDocumentLoader,
-        'dynamic_web': DynamicWebDocumentLoader
+        'dynamic_web': DynamicWebDocumentLoader,
+        'carbon_intensity': CarbonIntensityLoader
     }
     
     loader_class = loaders.get(loader_type.lower())
@@ -322,5 +370,10 @@ def load_notion_document(token: str, page_ids: Union[str, List[str]], project_id
 def load_dynamic_web_document(urls: Union[str, List[str]], project_id: str) -> List[Document]:
     """Backward compatible function for loading dynamic web documents."""
     loader = create_document_loader('dynamic_web', project_id)
+    return loader.load(urls)
+
+def load_carbon_intensity(urls: Optional[Union[str, List[str]]] = None, project_id: str = None) -> List[Document]:
+    """Backward compatible function for loading carbon intensity data."""
+    loader = create_document_loader('carbon_intensity', project_id)
     return loader.load(urls)
     
