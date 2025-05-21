@@ -45,7 +45,19 @@ class RAGPipeline:
         # Set up prompt template
         if prompt_template is None:
             prompt_template = '''
-            You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
+            You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question.
+            
+            For structured data like carbon intensity values:
+            - If the exact information is present, return all the values as they appear
+            - Include all relevant fields (From, To, Forecast, Actual, Index)
+            - Maintain the numerical precision of the values
+            - If the "Actual" value is marked as None, just return all the fields
+            
+            For other types of information:
+            - Provide a concise answer based on the context
+            - If you don't know the answer, just say that you don't know
+            - Use three sentences maximum
+            
             Question: {question} 
             Context: {context} 
             Answer:
@@ -105,8 +117,18 @@ class RAGPipeline:
         Args:
             documents: List of documents to add
         """
-        splits = self.text_splitter.split_documents(documents)
-        self.vector_store.update_store(splits)
+        # Separate carbon intensity documents from others
+        carbon_docs = [doc for doc in documents if doc.metadata.get('source_id') == 'carbon_intensity']
+        other_docs = [doc for doc in documents if doc.metadata.get('source_id') != 'carbon_intensity']
+        
+        # Only split non-carbon intensity documents
+        if other_docs:
+            splits = self.text_splitter.split_documents(other_docs)
+            self.vector_store.update_store(splits)
+            
+        # Add carbon intensity documents without splitting
+        if carbon_docs:
+            self.vector_store.update_store(carbon_docs)
 
     def query(self, question: str, project_id: str) -> str:
         """Run a query through the RAG pipeline.
